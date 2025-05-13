@@ -55,7 +55,8 @@ void setup()
             ;
     }
 
-    Serial.println("Inicialização completa!");
+    Serial.println("LoRa iniciado com sucesso!");
+    Serial.println("BMP380 e GPS iniciados com sucesso!");
 }
 
 void loop()
