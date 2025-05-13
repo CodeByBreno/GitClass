@@ -1,15 +1,22 @@
 #include <Wire.h>
 #include <Adafruit_BMP3XX.h>
+#include <TinyGPSPlus.h>
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 #define LED_PIN 2
 
+// Objetos do sensor e GPS
 Adafruit_BMP3XX bmp;
+TinyGPSPlus gps;
+HardwareSerial SerialGPS(2); // RX=16, TX=17
+
 float lastAltitude = 0.0;
 
 void setup()
 {
     Serial.begin(115200);
+    SerialGPS.begin(9600, SERIAL_8N1, 16, 17); // RX=16, TX=17
+
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
 
@@ -21,13 +28,11 @@ void setup()
             ;
     }
 
-    // Configurações padrão do BMP380
     bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
     bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
-    // Primeira leitura da altitude
     if (bmp.performReading())
     {
         lastAltitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
@@ -36,17 +41,17 @@ void setup()
 
 void loop()
 {
+    // ----------------- Leitura do BMP380 -----------------
     if (bmp.performReading())
     {
         float currentAltitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
 
-        Serial.print("Altitude: ");
+        Serial.print("Altitude (BMP380): ");
         Serial.print(currentAltitude);
         Serial.println(" m");
 
-        // Verifica se a altitude está diminuindo
         if (currentAltitude < lastAltitude - 0.1)
-        { // usa uma tolerância de 0.1m
+        {
             digitalWrite(LED_PIN, HIGH);
         }
         else
@@ -58,8 +63,48 @@ void loop()
     }
     else
     {
-        Serial.println("Erro na leitura do sensor!");
+        Serial.println("Erro na leitura do BMP380!");
     }
 
-    delay(500); // Espera 500 ms entre as leituras
+    // ----------------- Leitura do GPS -----------------
+    while (SerialGPS.available() > 0)
+    {
+        gps.encode(SerialGPS.read());
+    }
+
+    if (gps.location.isUpdated())
+    {
+        Serial.print("Latitude: ");
+        Serial.println(gps.location.lat(), 6);
+
+        Serial.print("Longitude: ");
+        Serial.println(gps.location.lng(), 6);
+
+        if (gps.date.isValid() && gps.time.isValid())
+        {
+            Serial.print("Data: ");
+            Serial.print(gps.date.day());
+            Serial.print("/");
+            Serial.print(gps.date.month());
+            Serial.print("/");
+            Serial.println(gps.date.year());
+
+            Serial.print("Hora: ");
+            Serial.print(gps.time.hour());
+            Serial.print(":");
+            Serial.print(gps.time.minute());
+            Serial.print(":");
+            Serial.println(gps.time.second());
+        }
+        else
+        {
+            Serial.println("Hora/Data inválidas");
+        }
+    }
+    else
+    {
+        Serial.println("Aguardando sinal de GPS...");
+    }
+
+    delay(1000);
 }
