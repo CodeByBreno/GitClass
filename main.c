@@ -21,7 +21,8 @@ HardwareSerial SerialGPS(2); // RX=16, TX=17
 
 void setup()
 {
-    Serial.begin(1000);
+
+    Serial.begin(9600);
     SerialGPS.begin(9600, SERIAL_8N1, 16, 17); // GPS: RX=16, TX=17
 
     pinMode(LED_PIN, OUTPUT);
