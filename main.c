@@ -21,7 +21,7 @@ HardwareSerial SerialGPS(2); // RX=16, TX=17
 
 void setup()
 {
-    Serial.begin(115200);
+    Serial.begin(1000);
     SerialGPS.begin(9600, SERIAL_8N1, 16, 17); // GPS: RX=16, TX=17
 
     pinMode(LED_PIN, OUTPUT);
@@ -54,7 +54,7 @@ void setup()
             ;
     }
 
-    Serial.println("Sistema iniciado com BMP380, GPS e LoRa.");
+    Serial.println("Inicialização completa!");
 }
 
 void loop()
