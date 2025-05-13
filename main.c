@@ -54,7 +54,7 @@ void setup()
             ;
     }
 
-    Serial.println("Sistema iniciado");
+    Serial.println("Sistema iniciado 123");
 }
 
 void loop()
