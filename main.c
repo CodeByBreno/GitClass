@@ -1,26 +1,33 @@
 #include <Wire.h>
 #include <Adafruit_BMP3XX.h>
 #include <TinyGPSPlus.h>
+#include <LoRa.h>
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 #define LED_PIN 2
 
-// Objetos do sensor e GPS
+// BMP380
 Adafruit_BMP3XX bmp;
+float lastAltitude = 0.0;
+
+// GPS
 TinyGPSPlus gps;
 HardwareSerial SerialGPS(2); // RX=16, TX=17
 
-float lastAltitude = 0.0;
+// LoRa (pinos podem variar conforme seu módulo)
+#define LORA_SS 5
+#define LORA_RST 14
+#define LORA_DIO0 26
 
 void setup()
 {
     Serial.begin(115200);
-    SerialGPS.begin(9600, SERIAL_8N1, 16, 17); // RX=16, TX=17
+    SerialGPS.begin(9600, SERIAL_8N1, 16, 17); // GPS: RX=16, TX=17
 
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
 
-    // Inicializa o sensor BMP380
+    // Inicia BMP380
     if (!bmp.begin_I2C())
     {
         Serial.println("Erro ao inicializar o BMP380!");
@@ -37,74 +44,74 @@ void setup()
     {
         lastAltitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
     }
+
+    // Inicia LoRa
+    LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
+    if (!LoRa.begin(915E6)) // ajuste para 433E6 ou 868E6 conforme módulo
+    {
+        Serial.println("Erro ao iniciar LoRa!");
+        while (1)
+            ;
+    }
+
+    Serial.println("Sistema iniciado com BMP380, GPS e LoRa.");
 }
 
 void loop()
 {
-    // ----------------- Leitura do BMP380 -----------------
+    // =================== BMP380 ===================
+    float currentAltitude = lastAltitude;
     if (bmp.performReading())
     {
-        float currentAltitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
-
-        Serial.print("Altitude (BMP380): ");
-        Serial.print(currentAltitude);
-        Serial.println(" m");
-
+        currentAltitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
         if (currentAltitude < lastAltitude - 0.1)
-        {
             digitalWrite(LED_PIN, HIGH);
-        }
         else
-        {
             digitalWrite(LED_PIN, LOW);
-        }
-
         lastAltitude = currentAltitude;
     }
-    else
-    {
-        Serial.println("Erro na leitura do BMP380!");
-    }
 
-    // ----------------- Leitura do GPS -----------------
+    // =================== GPS ===================
     while (SerialGPS.available() > 0)
     {
         gps.encode(SerialGPS.read());
     }
 
-    if (gps.location.isUpdated())
-    {
-        Serial.print("Latitude: ");
-        Serial.println(gps.location.lat(), 6);
+    double latitude = gps.location.isValid() ? gps.location.lat() : 0.0;
+    double longitude = gps.location.isValid() ? gps.location.lng() : 0.0;
+    int hour = gps.time.isValid() ? gps.time.hour() : -1;
+    int minute = gps.time.isValid() ? gps.time.minute() : -1;
+    int second = gps.time.isValid() ? gps.time.second() : -1;
 
-        Serial.print("Longitude: ");
-        Serial.println(gps.location.lng(), 6);
+    // =================== Serial Debug ===================
+    Serial.print("Altitude: ");
+    Serial.print(currentAltitude);
+    Serial.println(" m");
+    Serial.print("Lat: ");
+    Serial.println(latitude, 6);
+    Serial.print("Lng: ");
+    Serial.println(longitude, 6);
+    Serial.print("Hora: ");
+    Serial.print(hour);
+    Serial.print(":");
+    Serial.print(minute);
+    Serial.print(":");
+    Serial.println(second);
 
-        if (gps.date.isValid() && gps.time.isValid())
-        {
-            Serial.print("Data: ");
-            Serial.print(gps.date.day());
-            Serial.print("/");
-            Serial.print(gps.date.month());
-            Serial.print("/");
-            Serial.println(gps.date.year());
+    // =================== Envio via LoRa ===================
+    String data = String(currentAltitude, 2) + "," +
+                  String(latitude, 6) + "," +
+                  String(longitude, 6) + "," +
+                  String(hour) + "," +
+                  String(minute) + "," +
+                  String(second);
 
-            Serial.print("Hora: ");
-            Serial.print(gps.time.hour());
-            Serial.print(":");
-            Serial.print(gps.time.minute());
-            Serial.print(":");
-            Serial.println(gps.time.second());
-        }
-        else
-        {
-            Serial.println("Hora/Data inválidas");
-        }
-    }
-    else
-    {
-        Serial.println("Aguardando sinal de GPS...");
-    }
+    LoRa.beginPacket();
+    LoRa.print(data);
+    LoRa.endPacket();
 
-    delay(1000);
+    Serial.print("Enviado via LoRa: ");
+    Serial.println(data);
+
+    delay(2000); // Aguarda 2s
 }
